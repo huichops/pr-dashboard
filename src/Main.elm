@@ -7,7 +7,8 @@ import Json.Encode as Encode
 import Http
 
 ---- MODEL ----
-
+token : String
+token = "Github_Token_Goes_Here"
 
 type alias Model = User
 
