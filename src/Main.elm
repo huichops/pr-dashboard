@@ -1,6 +1,6 @@
 module Main exposing (..)
 
-import Html exposing (Html, text, div, img, ul, li)
+import Html exposing (..)
 import Html.Attributes exposing (src)
 import Json.Decode as Decode
 import Json.Encode as Encode
@@ -46,16 +46,17 @@ update msg model =
 view : Model -> Html Msg
 view model =
     div []
-        [ img [ src model.avatarUrl ] []
-        , div [] [ text model.name ]
+        [ h1 [] [ text ("Que pedo, " ++ model.name) ]
+        , img [ src model.avatarUrl ] []
         , ul [] ( List.map issuesv model.issues )
         ]
 
-issuesv : { a | name : String, state : String } -> Html msg
-issuesv {name, state} =
+issuesv : Issue -> Html msg
+issuesv {name, state, bodyText} =
   li []
-    [ div [] [ text name ]
-    , div [] [ text state ]
+    [ h3 [] [ text name ]
+    , h4 [] [ text state ]
+    , p [] [ text bodyText ]
     ]
 
 
@@ -64,6 +65,7 @@ issuesv {name, state} =
 type alias Issue =
   { state : String
   , name : String
+  , bodyText : String
   }
 
 type alias User =
@@ -75,8 +77,9 @@ type alias User =
 decodeIssue : Decode.Decoder (List Issue)
 decodeIssue =
   Decode.list (
-    Decode.map2 Issue
+    Decode.map3 Issue
         (Decode.at ["state"] Decode.string)
+        (Decode.at ["bodyText"] Decode.string)
         (Decode.at ["repository", "name"] Decode.string)
   )
 
@@ -84,7 +87,7 @@ decodeIssue =
 decodeUser : Decode.Decoder User
 decodeUser =
     Decode.map3 User
-        (Decode.at ["data", "viewer", "name"] Decode.string)
+        (Decode.at ["data", "viewer", "login"] Decode.string)
         (Decode.at ["data", "viewer", "avatarUrl"] Decode.string)
         (Decode.at ["data", "viewer", "issues", "nodes"] decodeIssue)
 
@@ -96,7 +99,7 @@ requestUser url =
     body =
       Encode.object
         [( "query",
-          Encode.string "{ viewer { login name avatarUrl issues(first: 30) { nodes {state createdAt repository { name }  } }}}"
+          Encode.string "{ viewer { login login avatarUrl issues(first: 30 states: OPEN) { nodes {state bodyText createdAt repository { name }  } }}}"
         )]
       |> Encode.encode 0
       |> Http.stringBody "application/json"
