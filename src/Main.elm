@@ -7,15 +7,12 @@ import Json.Encode as Encode
 import Http
 
 ---- MODEL ----
-token : String
-token = "Github_Token_Goes_Here"
 
 type alias Model = User
 
-init : ( Model, Cmd Msg )
-init =
-    ( User "No User" "/logo.svg" [], getUserData )
-
+init : Flags -> ( Model, Cmd Msg )
+init flags =
+    ( User "No User" "/logo.svg" [], getUserData flags.githubToken )
 
 
 ---- UPDATE ----
@@ -33,8 +30,8 @@ update msg model =
       model ! []
     UserData result ->
       case result of
-        Ok user ->
-           ( user, Cmd.none )
+        Ok userResult ->
+           ( userResult, Cmd.none )
         Err error ->
           Debug.log (toString error)
           model ! []
@@ -45,27 +42,44 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ h1 [] [ text ("Que pedo, " ++ model.name) ]
-        , img [ src model.avatarUrl ] []
-        , ul [] ( List.map issuesv model.issues )
-        ]
+  div []
+    [ h1 [] [ text ("Que pedo, " ++ model.name) ]
+    , img [ src model.avatarUrl ] []
+    , ul [] ( List.map issuesv model.issues )
+    ]
 
 issuesv : Issue -> Html msg
-issuesv {name, state, bodyText} =
+issuesv { name, state, bodyText } =
   li []
-    [ h3 [] [ text name ]
-    , h4 [] [ text state ]
+    [ h2 [] [ text name ]
+    , h3 [] [ text state ]
     , p [] [ text bodyText ]
     ]
 
 
----- PROGRAM ----
+--- PROGRAM ----
+
+query : String
+query = """
+  { viewer
+    {
+      login
+      avatarUrl
+      issues(first: 30 states: OPEN) {
+        nodes {
+          state
+          bodyText
+          repository { name }
+        }
+      }
+    }
+  }
+"""
 
 type alias Issue =
   { state : String
-  , name : String
   , bodyText : String
+  , name : String
   }
 
 type alias User =
@@ -91,16 +105,14 @@ decodeUser =
         (Decode.at ["data", "viewer", "avatarUrl"] Decode.string)
         (Decode.at ["data", "viewer", "issues", "nodes"] decodeIssue)
 
-requestUser : String -> Http.Request User
-requestUser url =
+requestUser : String -> String -> Http.Request User
+requestUser token url =
   let
     headers =
       [ "bearer " ++ token |> Http.header "Authorization" ]
     body =
-      Encode.object
-        [( "query",
-          Encode.string "{ viewer { login login avatarUrl issues(first: 30 states: OPEN) { nodes {state bodyText createdAt repository { name }  } }}}"
-        )]
+      [( "query", Encode.string query )]
+      |> Encode.object
       |> Encode.encode 0
       |> Http.stringBody "application/json"
   in
@@ -114,18 +126,21 @@ requestUser url =
       , withCredentials = False
       }
 
-getUserData : Cmd Msg
-getUserData =
+getUserData : String -> Cmd Msg
+getUserData token =
   let
     url =
       "https://api.github.com/graphql"
   in
-    requestUser url
+    requestUser token url
     |> Http.send UserData
 
-main : Program Never Model Msg
+
+type alias Flags = { githubToken : String }
+
+main : Program Flags Model Msg
 main =
-    Html.program
+    Html.programWithFlags
         { view = view
         , init = init
         , update = update
